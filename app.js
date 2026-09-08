@@ -75,13 +75,37 @@ function globalSearch(){
 }
 function preferredTitle(row){const keys=Object.keys(row);const wanted=['descripcion','modelo','nombre','referencia','ref','codigo','cliente','razon_social'];for(const w of wanted){const k=keys.find(x=>normalize(x)===w||normalize(x).includes(w));if(k&&row[k]!==null&&String(row[k]).trim())return String(row[k])}const k=keys.find(x=>row[x]!=null&&String(row[x]).trim());return k?String(row[k]):'Registro'}
 function visibleFields(row){const keys=Object.keys(row);const score=k=>{const n=normalize(k);if(/descripcion|modelo|nombre|referencia|proveedor|telefono|presion|caudal|familia|contacto/.test(n))return 10;if(/id$|pdf|ruta|path|archivo/.test(n))return 0;return 3};return keys.filter(k=>row[k]!=null&&String(row[k]).trim()).sort((a,b)=>score(b)-score(a)).slice(0,5)}
-function resultCard(row,section){const d=document.createElement('div');d.className='resultCard';const fs=visibleFields(row);d.innerHTML=`<span class="pill">${html(section.label)}</span><h3>${html(preferredTitle(row))}</h3><div class="resultMeta">${fs.map(k=>`<div class="fieldLine"><b>${html(k)}:</b> ${html(row[k])}</div>`).join('')}</div>`;d.onclick=()=>showDetail(row,section);return d}
+function findField(row,names){const keys=Object.keys(row);for(const wanted of names){const w=normalize(wanted);let k=keys.find(x=>normalize(x)===w);if(k)return k;k=keys.find(x=>normalize(x).includes(w));if(k)return k}return null}
+function pdfLinkField(row,section){
+  const bySection={
+    articulos:['descripcion'],
+    fichas:['descripcion'],
+    gruas:['modelo'],
+    catalogos:['nombre_catalogo','nombre','catalogo'],
+    publicitarias:['nombre_ficha','nombre','ficha']
+  };
+  const names=bySection[section?.key]||[];return findField(row,names);
+}
+function resultCard(row,section){
+  const d=document.createElement('div');d.className='resultCard';const fs=visibleFields(row);const pdf=findPdfCandidate(row);const linkKey=pdf&&pdfLinkField(row,section);const title=preferredTitle(row);
+  d.innerHTML=`<span class="pill">${html(section.label)}</span><h3 class="resultTitle">${html(title)}</h3><div class="resultMeta">${fs.map(k=>`<div class="fieldLine"><b>${html(k)}:</b> ${html(row[k])}</div>`).join('')}</div>`;
+  if(linkKey){const h=d.querySelector('.resultTitle');h.innerHTML=`<button class="pdfTextLink" type="button">${html(row[linkKey]??title)} <span aria-hidden="true">📄</span></button>`;h.querySelector('button').onclick=e=>{e.stopPropagation();openPdfForValue(pdf)}}
+  d.onclick=()=>showDetail(row,section);return d
+}
 function renderResults(box,rows,section){box.innerHTML='';if(!rows.length){box.innerHTML='<div class="card stack"><span class="muted">No se han encontrado resultados.</span></div>';return}rows.forEach(r=>box.appendChild(resultCard(r,section)))}
 function showDetail(row,section){
   $('#detailSection').textContent=section.label;$('#detailTitle').textContent=preferredTitle(row);const body=$('#detailBody');body.innerHTML='';
-  for(const [k,v] of Object.entries(row)){if(v===null||String(v).trim()==='')continue;const r=document.createElement('div');r.className='detailRow';r.innerHTML=`<div class="label">${html(k)}</div><div class="value">${html(v)}</div>`;body.appendChild(r)}
-  const acts=$('#detailActions');acts.innerHTML='';const pdf=findPdfCandidate(row);if(pdf){const b=document.createElement('button');b.className='primary';b.textContent='📄 Ver PDF';b.onclick=()=>openPdfForValue(pdf);acts.appendChild(b)}
-  $('#detailDialog').showModal();
+  const pdf=findPdfCandidate(row);const linkKey=pdf&&pdfLinkField(row,section);
+  for(const [k,v] of Object.entries(row)){
+    if(v===null||String(v).trim()==='')continue;const r=document.createElement('div');r.className='detailRow';
+    if(linkKey===k){r.innerHTML=`<div class="label">${html(k)}</div><div class="value"><button class="pdfTextLink detailPdfLink" type="button">${html(v)} <span aria-hidden="true">📄</span></button></div>`;r.querySelector('button').onclick=()=>openPdfForValue(pdf)}
+    else r.innerHTML=`<div class="label">${html(k)}</div><div class="value">${html(v)}</div>`;
+    body.appendChild(r)
+  }
+  const acts=$('#detailActions');acts.innerHTML='';
+  // En tablas no reconocidas mantenemos un acceso de respaldo si existe un PDF.
+  if(pdf&&!linkKey){const b=document.createElement('button');b.className='primary';b.textContent='📄 Abrir PDF';b.onclick=()=>openPdfForValue(pdf);acts.appendChild(b)}
+  acts.style.display=acts.children.length?'grid':'none';$('#detailDialog').showModal();
 }
 function findPdfCandidate(row){for(const [k,v] of Object.entries(row)){if(v==null)continue;const s=String(v).trim();const n=normalize(k);if(s.toLowerCase().includes('.pdf'))return s;if(/pdf|archivo|fichero|ruta|path|documento/.test(n)&&s)return s}return null}
 function basename(p){return String(p).replaceAll('\\','/').split('/').pop().toLowerCase()}

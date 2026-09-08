@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#1f6f5f" />
-  <title>Material Móvil</title>
+  <title>Material Móvil v1.1</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -69,14 +69,14 @@
     <section id="viewFiles" class="view">
       <div class="sectionHeader"><button class="backBtn" data-nav="home">‹</button><h2>Carpeta de PDF</h2></div>
       <div class="card stack">
-        <p>Selecciona la carpeta del móvil que contiene los PDF. La aplicación no copia los PDF a la base de datos.</p>
+        <p>Selecciona la única carpeta <strong>pdf</strong> del móvil. Copia dentro de ella todos los PDF: artículos, grúas, fichas, catálogos y fichas publicitarias. La aplicación no los copia a la base de datos ni los sube a GitHub.</p>
         <button id="btnPickFolder" class="primary">Seleccionar carpeta de PDF</button>
         <input id="folderFallback" type="file" webkitdirectory multiple hidden />
         <div id="folderStatus" class="muted small">Ninguna carpeta seleccionada.</div>
       </div>
       <div class="card note">
-        <strong>Consejo</strong>
-        <p>Si Android permite conservar el permiso, la aplicación intentará recordar la carpeta. Si no, tendrás que seleccionarla de nuevo al abrir la app.</p>
+        <strong>Una sola carpeta PDF</strong>
+        <p>Todos los documentos pueden estar juntos. La aplicación localiza el PDF por el nombre guardado en material.db. Si Android conserva el permiso, intentará recordar la carpeta.</p>
       </div>
     </section>
 
@@ -88,9 +88,9 @@
     <section id="viewHelp" class="view">
       <div class="sectionHeader"><button class="backBtn" data-nav="home">‹</button><h2>Información</h2></div>
       <div class="card stack">
-        <p><strong>Material Móvil v1</strong> es una aplicación de consulta. La base y los PDF permanecen en tu teléfono.</p>
+        <p><strong>Material Móvil v1.1</strong> es una aplicación de consulta. La base y los PDF permanecen en tu teléfono.</p>
         <p>Para actualizar los datos, vuelve a importar una copia reciente de <code>material.db</code>.</p>
-        <p>Esta primera versión detecta automáticamente las tablas y columnas de SQLite. Cuando trabajemos con tu <strong>v9.12 exacta</strong> podremos afinar nombres de secciones y enlaces PDF si alguna ruta usa un formato especial.</p>
+        <p>Usa una única carpeta <strong>pdf</strong>. Cuando un registro tiene PDF, el enlace aparece sobre <strong>Descripción</strong> en Artículos/Fichas, <strong>Modelo</strong> en Grúas y <strong>Nombre</strong> en Catálogos/Fichas publicitarias.</p>
       </div>
     </section>
   </main>
