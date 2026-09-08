@@ -1,5 +1,5 @@
 let SQL=null, db=null, dbBytes=null, dbFileName='', schema=[], sectionMap=[], currentSection=null;
-let pdfIndex=new Map(), directoryHandle=null;
+let pdfFallbackIndex=new Map(), directoryHandle=null;
 
 const $=s=>document.querySelector(s); const $$=s=>[...document.querySelectorAll(s)];
 const qid=n=>'"'+String(n).replaceAll('"','""')+'"';
@@ -110,22 +110,52 @@ function pdfCandidates(row,section){
   }
   return [...new Set(vals)]
 }
-function resolvePdf(row,section){
-  if(!supportsPdf(section)||!pdfIndex.size)return null;
+async function findPdfEntry(row,section){
+  if(!supportsPdf(section))return null;
   const cands=pdfCandidates(row,section);
-  // exact basename first
-  for(const c of cands){const base=basename(c);for(const k of [base,base.endsWith('.pdf')?base:base+'.pdf']){if(pdfIndex.has(k))return pdfIndex.get(k)}}
-  // exact normalized stem
-  const entries=[...pdfIndex.entries()];
-  for(const c of cands){const cs=normalizeStem(c);if(!cs)continue;const hit=entries.find(([k])=>normalizeStem(k)===cs);if(hit)return hit[1]}
-  // cautious fallback: filename ending/starting with an id or barcode-like candidate
-  for(const c of cands){const cs=normalizeStem(c);if(cs.length<4)continue;const hit=entries.find(([k])=>{const ks=normalizeStem(k);return ks===cs||ks.startsWith(cs)||ks.endsWith(cs)});if(hit)return hit[1]}
+
+  // Selector moderno: NO indexamos toda la carpeta. Buscamos únicamente el
+  // documento solicitado. Esto evita que Android tenga que mantener miles de
+  // manejadores de archivos en memoria al elegir la carpeta.
+  if(directoryHandle){
+    for(const c of cands){
+      const base=basename(c);
+      const names=[base,base.toLowerCase().endsWith('.pdf')?base:base+'.pdf'];
+      for(const name of names){
+        try{return await directoryHandle.getFileHandle(name,{create:false})}catch(e){}
+      }
+    }
+    // Segunda pasada, sólo si hace falta, para diferencias de mayúsculas o
+    // nombres con una convención ligeramente distinta.
+    try{
+      const wanted=cands.map(c=>normalizeStem(c)).filter(Boolean);
+      for await(const [name,entry] of directoryHandle.entries()){
+        if(entry.kind!=='file'||!name.toLowerCase().endsWith('.pdf'))continue;
+        const stem=normalizeStem(name);
+        if(wanted.some(w=>stem===w||(w.length>=4&&(stem.startsWith(w)||stem.endsWith(w)))))return entry;
+      }
+    }catch(e){console.warn(e)}
+  }
+
+  // Compatibilidad con navegadores que sólo permiten seleccionar la carpeta
+  // mediante <input webkitdirectory>. En ese caso sí recibimos la lista de
+  // ficheros, pero sólo se conserva durante esta sesión.
+  if(pdfFallbackIndex.size){
+    for(const c of cands){
+      const base=basename(c);
+      for(const k of [base,base.endsWith('.pdf')?base:base+'.pdf']){
+        const hit=pdfFallbackIndex.get(k.toLowerCase());if(hit)return hit;
+      }
+    }
+    const entries=[...pdfFallbackIndex.entries()];
+    for(const c of cands){const cs=normalizeStem(c);if(!cs)continue;const hit=entries.find(([k])=>{const ks=normalizeStem(k);return ks===cs||(cs.length>=4&&(ks.startsWith(cs)||ks.endsWith(cs)))});if(hit)return hit[1]}
+  }
   return null;
 }
+function pdfFolderReady(){return !!directoryHandle || pdfFallbackIndex.size>0}
 function resultCard(row,section){
-  const d=document.createElement('div');d.className='resultCard';const fs=visibleFields(row);const pdf=resolvePdf(row,section);const linkKey=pdf&&pdfLinkField(row,section);const title=preferredTitle(row);
-  d.innerHTML=`<span class="pill">${html(section.label)}</span><h3 class="resultTitle">${html(title)}</h3><div class="resultMeta">${fs.map(k=>`<div class="fieldLine"><b>${html(prettyLabel(k))}:</b> ${html(row[k])}</div>`).join('')}</div>${pdf?'<div class="pdfBadge">📄 PDF disponible</div>':''}`;
-  if(linkKey){const h=d.querySelector('.resultTitle');h.innerHTML=`<button class="pdfTextLink" type="button">${html(row[linkKey]??title)} <span aria-hidden="true">📄</span></button>`;h.querySelector('button').onclick=e=>{e.stopPropagation();openPdfEntry(pdf)}}
+  const d=document.createElement('div');d.className='resultCard';const fs=visibleFields(row);const title=preferredTitle(row);
+  d.innerHTML=`<span class="pill">${html(section.label)}</span><h3 class="resultTitle">${html(title)}</h3><div class="resultMeta">${fs.map(k=>`<div class="fieldLine"><b>${html(prettyLabel(k))}:</b> ${html(row[k])}</div>`).join('')}</div>`;
   d.onclick=()=>showDetail(row,section);return d
 }
 function prettyLabel(k){const m={familia:'Familia',ref_proveedor:'Ref. proveedor',codigo_barras:'Código de barras',referencia:'Referencia',descripcion:'Descripción',descripcion2:'Descripción 2',estado:'Estado',proveedor:'Proveedor',anotaciones:'Anotaciones',modelo:'Modelo',presion:'Presión',caudal:'Caudal',nombre:'Nombre',contacto:'Contacto',telefono:'Teléfono',direccion:'Dirección',poblacion:'Población',codigo_postal:'Código postal',provincia:'Provincia',comunidad_autonoma:'Comunidad autónoma',observaciones:'Observaciones',referencia_tip:'Referencia TIP'};return m[normalize(k)]||String(k).replaceAll('_',' ')}
@@ -135,37 +165,56 @@ function kitComponents(kitId){
   if(!schema.some(t=>t.name==='components')||!schema.some(t=>t.name==='articles'))return [];
   try{const st=db.prepare(`SELECT c.cantidad,c.posicion,a.codigo_barras,a.referencia,a.descripcion FROM components c JOIN articles a ON a.id=c.article_id WHERE c.kit_id=? ORDER BY c.posicion,c.id`);st.bind([kitId]);const out=[];while(st.step())out.push(st.getAsObject());st.free();return out}catch(e){return []}
 }
-function showDetail(row,section){
+async function showDetail(row,section){
   $('#detailSection').textContent=section.label;$('#detailTitle').textContent=preferredTitle(row);const body=$('#detailBody');body.innerHTML='';
-  const pdf=resolvePdf(row,section);const linkKey=pdf&&pdfLinkField(row,section);
   for(const [k,v] of Object.entries(row)){
     if(['id','proveedor_id'].includes(normalize(k))||v===null||String(v).trim()==='')continue;
-    addDetailRow(body,k,String(v),linkKey===k?()=>openPdfEntry(pdf):null)
+    addDetailRow(body,k,String(v),null)
   }
   if(section?.key==='kits'&&row.id!=null){const comps=kitComponents(row.id);if(comps.length){const box=document.createElement('div');box.className='kitComponents';box.innerHTML='<h3>Componentes del kit</h3>'+comps.map(c=>`<div class="kitComp"><b>${html(c.cantidad)} × ${html(c.descripcion||c.referencia||c.codigo_barras)}</b><small>${html(c.referencia||'')} · ${html(c.codigo_barras||'')}</small></div>`).join('');body.appendChild(box)}}
-  const acts=$('#detailActions');acts.innerHTML='';
-  if(pdf){const b=document.createElement('button');b.className='primary';b.textContent='📄 Abrir PDF';b.onclick=()=>openPdfEntry(pdf);acts.appendChild(b)}
-  else if(supportsPdf(section)){const info=document.createElement('div');info.className='pdfMissing';info.textContent=pdfIndex.size?'PDF no localizado en la carpeta seleccionada':'Selecciona primero la carpeta pdf';acts.appendChild(info)}
-  acts.style.display=acts.children.length?'grid':'none';$('#detailDialog').showModal();
+  const acts=$('#detailActions');acts.innerHTML='';acts.style.display='none';$('#detailDialog').showModal();
+
+  if(!supportsPdf(section))return;
+  if(!pdfFolderReady()){
+    const info=document.createElement('div');info.className='pdfMissing';info.textContent='Selecciona primero la carpeta pdf';acts.appendChild(info);acts.style.display='grid';return;
+  }
+
+  const loading=document.createElement('div');loading.className='pdfMissing';loading.textContent='Buscando PDF…';acts.appendChild(loading);acts.style.display='grid';
+  const pdf=await findPdfEntry(row,section);
+  // La ficha puede haberse cerrado mientras buscábamos.
+  if(!$('#detailDialog').open)return;
+  acts.innerHTML='';
+  if(pdf){
+    const linkKey=pdfLinkField(row,section);
+    if(linkKey){
+      const rows=[...body.querySelectorAll('.detailRow')];
+      const target=rows.find(r=>normalize(r.querySelector('.label')?.textContent)===normalize(prettyLabel(linkKey)));
+      if(target){const val=target.querySelector('.value');const text=val.textContent;val.innerHTML='';const b=document.createElement('button');b.className='pdfTextLink detailPdfLink';b.type='button';b.innerHTML=`${html(text)} <span aria-hidden="true">📄</span>`;b.onclick=()=>openPdfEntry(pdf);val.appendChild(b)}
+    }
+    const b=document.createElement('button');b.className='primary';b.textContent='📄 Abrir PDF';b.onclick=()=>openPdfEntry(pdf);acts.appendChild(b);
+  }else{
+    const info=document.createElement('div');info.className='pdfMissing';info.textContent='Este registro no tiene PDF localizado';acts.appendChild(info)
+  }
+  acts.style.display='grid';
 }
 async function openPdfEntry(entry){
   if(!entry){toast('No encuentro ese PDF en la carpeta seleccionada');return}
   try{const file=entry.getFile?await entry.getFile():entry;const url=URL.createObjectURL(file);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000)}catch(e){console.error(e);toast('No se pudo abrir el PDF')}
 }
 async function pickPdfFolder(){
-  // La carpeta PDF usa un almacén independiente de la base SQLite. En Android el
-  // selector puede pausar/reanudar la PWA; al volver verificamos la BD y la vista.
-  const sectionKey=currentSection?.key||null;
+  // v1.4: seleccionar la carpeta NO la recorre ni indexa. Sólo guardamos el
+  // permiso. Así la base SQLite queda totalmente al margen del selector PDF.
   if(window.showDirectoryPicker){
     try{
       const h=await window.showDirectoryPicker({mode:'read'});
       directoryHandle=h;
       try{await pdfIdbSet('pdfDir',h)}catch(e){console.warn('No se pudo recordar la carpeta PDF',e)}
-      await indexDirectory(h);
+      $('#folderStatus').textContent=`${h.name} · carpeta autorizada`;
+      toast('Carpeta PDF seleccionada');
       await ensureDbReady();
-      restoreSectionAfterPdfPick(sectionKey);
+      renderHome();
       return;
-    }catch(e){if(e.name!=='AbortError')console.warn(e)}
+    }catch(e){if(e.name==='AbortError')return;console.warn(e)}
   }
   $('#folderFallback').click();
 }
@@ -174,15 +223,22 @@ async function ensureDbReady(){
   try{const buf=await idbGet('dbBytes');const name=await idbGet('dbName');if(buf&&SQL){loadDb(new Uint8Array(buf),name||'material.db');return true}}catch(e){console.warn(e)}
   return false;
 }
-function restoreSectionAfterPdfPick(sectionKey){
-  if(!db)return;
-  if(sectionKey){const s=sectionMap.find(x=>x.key===sectionKey);if(s){currentSection=s;runSectionQuery($('#sectionSearch')?.value||'');}}
-  renderHome();
+function indexFallbackFiles(files){
+  pdfFallbackIndex.clear();let count=0;
+  for(const f of files){if(f.name.toLowerCase().endsWith('.pdf')){pdfFallbackIndex.set(f.name.toLowerCase(),f);count++}}
+  $('#folderStatus').textContent=`Carpeta seleccionada · ${count} PDF disponibles (esta sesión)`;toast('Carpeta PDF seleccionada');
+  ensureDbReady().then(()=>renderHome());
 }
-
-async function indexDirectory(handle){pdfIndex.clear();let count=0;async function walk(h){for await(const [name,entry] of h.entries()){if(entry.kind==='directory')await walk(entry);else if(name.toLowerCase().endsWith('.pdf')){pdfIndex.set(name.toLowerCase(),entry);count++}}}await walk(handle);$('#folderStatus').textContent=`${handle.name} · ${count} PDF disponibles`;toast(`${count} PDF indexados`)}
-function indexFallbackFiles(files){pdfIndex.clear();let count=0;for(const f of files){if(f.name.toLowerCase().endsWith('.pdf')){pdfIndex.set(f.name.toLowerCase(),f);count++}}$('#folderStatus').textContent=`Carpeta seleccionada · ${count} PDF disponibles (esta sesión)`;toast(`${count} PDF indexados`);ensureDbReady().then(()=>restoreSectionAfterPdfPick(currentSection?.key||null))}
-async function restoreDirectoryHandle(){try{const h=await pdfIdbGet('pdfDir');if(h&&h.queryPermission){const p=await h.queryPermission({mode:'read'});if(p==='granted'){directoryHandle=h;await indexDirectory(h)}else $('#folderStatus').textContent='Carpeta recordada; toca “Seleccionar carpeta” para autorizarla.'}}catch{}}
+async function restoreDirectoryHandle(){
+  try{
+    const h=await pdfIdbGet('pdfDir');
+    if(h&&h.queryPermission){
+      const p=await h.queryPermission({mode:'read'});
+      if(p==='granted'){directoryHandle=h;$('#folderStatus').textContent=`${h.name} · carpeta autorizada`}
+      else $('#folderStatus').textContent='Carpeta recordada; toca “Seleccionar carpeta” para autorizarla.'
+    }
+  }catch(e){console.warn(e)}
+}
 function renderAllTables(){const b=$('#allTables');b.innerHTML='';if(!db){b.innerHTML='<div class="card stack muted">Importa primero la base de datos.</div>';return}schema.forEach(t=>{const d=document.createElement('button');d.className='resultCard tableItem';d.innerHTML=`<strong>${html(t.name)}</strong><span class="small muted">${t.cols.length} columnas</span>`;d.onclick=()=>openSection({label:t.name,icon:'🗂️',table:t});b.appendChild(d)})}
 
 function pdfIdb(){return new Promise((res,rej)=>{const r=indexedDB.open('material-movil-pdf',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
