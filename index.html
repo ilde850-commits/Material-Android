@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#1f6f5f" />
+  <title>Material Móvil</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">BASE DE DATOS</div>
+      <h1>Material Móvil</h1>
+    </div>
+    <button id="btnStatus" class="iconBtn" aria-label="Estado">●</button>
+  </header>
+
+  <main id="app" class="app">
+    <section id="viewHome" class="view active">
+      <div class="hero card">
+        <div>
+          <div class="muted">Base cargada</div>
+          <strong id="dbName">Ninguna</strong>
+          <div id="dbInfo" class="small muted">Importa material.db para comenzar.</div>
+        </div>
+        <button id="btnImportDb" class="primary">Importar / actualizar DB</button>
+        <input id="dbFile" type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream" hidden />
+      </div>
+
+      <div class="sectionTitle">Secciones</div>
+      <div id="sectionGrid" class="grid"></div>
+
+      <div class="sectionTitle">Accesos rápidos</div>
+      <div class="quickGrid">
+        <button class="quick card" data-nav="search"><span class="emoji">🔎</span><span>Buscar en todo</span></button>
+        <button class="quick card" data-nav="files"><span class="emoji">📁</span><span>Carpeta de PDF</span></button>
+        <button class="quick card" data-nav="tables"><span class="emoji">🗃️</span><span>Todas las tablas</span></button>
+        <button class="quick card" data-nav="help"><span class="emoji">ℹ️</span><span>Información</span></button>
+      </div>
+    </section>
+
+    <section id="viewSearch" class="view">
+      <div class="searchBox stickySearch">
+        <input id="globalSearch" type="search" placeholder="Referencia, descripción, proveedor, modelo..." autocomplete="off" />
+        <button id="btnGlobalSearch" class="primary">Buscar</button>
+      </div>
+      <div id="searchMeta" class="muted small"></div>
+      <div id="searchResults" class="results"></div>
+    </section>
+
+    <section id="viewSection" class="view">
+      <div class="sectionHeader">
+        <button class="backBtn" data-nav="home">‹</button>
+        <div>
+          <div class="muted small">SECCIÓN</div>
+          <h2 id="sectionName">Sección</h2>
+        </div>
+      </div>
+      <div class="searchBox stickySearch">
+        <input id="sectionSearch" type="search" placeholder="Buscar en esta sección..." autocomplete="off" />
+        <button id="btnSectionSearch" class="primary">Buscar</button>
+      </div>
+      <div id="sectionMeta" class="muted small"></div>
+      <div id="sectionResults" class="results"></div>
+    </section>
+
+    <section id="viewFiles" class="view">
+      <div class="sectionHeader"><button class="backBtn" data-nav="home">‹</button><h2>Carpeta de PDF</h2></div>
+      <div class="card stack">
+        <p>Selecciona la carpeta del móvil que contiene los PDF. La aplicación no copia los PDF a la base de datos.</p>
+        <button id="btnPickFolder" class="primary">Seleccionar carpeta de PDF</button>
+        <input id="folderFallback" type="file" webkitdirectory multiple hidden />
+        <div id="folderStatus" class="muted small">Ninguna carpeta seleccionada.</div>
+      </div>
+      <div class="card note">
+        <strong>Consejo</strong>
+        <p>Si Android permite conservar el permiso, la aplicación intentará recordar la carpeta. Si no, tendrás que seleccionarla de nuevo al abrir la app.</p>
+      </div>
+    </section>
+
+    <section id="viewTables" class="view">
+      <div class="sectionHeader"><button class="backBtn" data-nav="home">‹</button><h2>Todas las tablas</h2></div>
+      <div id="allTables" class="results"></div>
+    </section>
+
+    <section id="viewHelp" class="view">
+      <div class="sectionHeader"><button class="backBtn" data-nav="home">‹</button><h2>Información</h2></div>
+      <div class="card stack">
+        <p><strong>Material Móvil v1</strong> es una aplicación de consulta. La base y los PDF permanecen en tu teléfono.</p>
+        <p>Para actualizar los datos, vuelve a importar una copia reciente de <code>material.db</code>.</p>
+        <p>Esta primera versión detecta automáticamente las tablas y columnas de SQLite. Cuando trabajemos con tu <strong>v9.12 exacta</strong> podremos afinar nombres de secciones y enlaces PDF si alguna ruta usa un formato especial.</p>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottomNav">
+    <button data-nav="home" class="navItem active"><span>⌂</span><small>Inicio</small></button>
+    <button data-nav="search" class="navItem"><span>⌕</span><small>Buscar</small></button>
+    <button data-nav="files" class="navItem"><span>▣</span><small>PDF</small></button>
+  </nav>
+
+  <dialog id="detailDialog">
+    <div class="dialogHead">
+      <div><div class="muted small" id="detailSection"></div><h2 id="detailTitle">Detalle</h2></div>
+      <button id="closeDetail" class="iconBtn">✕</button>
+    </div>
+    <div id="detailBody" class="detailBody"></div>
+    <div id="detailActions" class="dialogActions"></div>
+  </dialog>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
