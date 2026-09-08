@@ -1,4 +1,4 @@
-const CACHE='material-movil-v1-1';
+const CACHE='material-movil-v1-2';
 const LOCAL=['./','./index.html','./styles.css','./app.js','./manifest.json','./icons/icon-192.svg','./icons/icon-512.svg'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(LOCAL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));

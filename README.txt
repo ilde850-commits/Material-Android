@@ -1,22 +1,15 @@
-MATERIAL MÓVIL v1.1
+MATERIAL MÓVIL v1.2
 
-Versión móvil/PWA de consulta para GitHub Pages.
+Versión móvil/PWA de consulta para GitHub Pages, adaptada a la estructura de material.db v9.12.
 
-CAMBIOS v1.1
-- Una única carpeta llamada pdf para todos los documentos.
-- Los PDF no se guardan dentro de material.db ni se suben a GitHub.
-- Artículos: el PDF se abre pulsando Descripción.
-- Fichas técnicas: el PDF se abre pulsando Descripción.
-- Grúas: el PDF se abre pulsando Modelo.
-- Catálogos: el PDF se abre pulsando Nombre.
-- Fichas publicitarias: el PDF se abre pulsando Nombre.
-- Si el registro no tiene PDF asociado, el texto no aparece como enlace.
-
-USO
-1. Publica estos archivos en la raíz del repositorio de GitHub Pages.
-2. Importa material.db desde el móvil.
-3. Pulsa Carpeta de PDF y selecciona la carpeta pdf donde has copiado todos los documentos.
-4. Busca un registro y pulsa sobre el campo enlazado para abrir su PDF.
+CAMBIOS v1.2
+- Adaptación a tablas reales: articles, technical_sheets, kits/components, clients, cranes, catalogs, advertising_sheets y suppliers.
+- Muestra el nombre del proveedor y oculta ID/proveedor_id.
+- En Artículos, el PDF se busca por CODIGO_BARRAS.pdf (regla confirmada).
+- Una única carpeta pdf para todos los documentos.
+- Botón visible “Abrir PDF” dentro de la ficha cuando se localiza el documento.
+- Descripción/Modelo/Nombre actúan como enlace al PDF cuando está disponible.
+- Kits muestran su composición.
 
 NOTA
-La aplicación sigue usando detección automática de tablas/campos hasta disponer de la material.db exacta de v9.12 para ajustar cualquier nombre especial.
+La base de datos de ejemplo no guarda columnas con ruta/nombre de PDF para Fichas, Grúas, Catálogos o Fichas publicitarias. Por ello la app prueba automáticamente las convenciones habituales (id, referencia, modelo/nombre, código de barras y prefijos). Si algún PDF de esas secciones no se localiza, basta comprobar el nombre real con el que lo guarda el programa de PC para afinar la regla sin compartir datos sensibles.
