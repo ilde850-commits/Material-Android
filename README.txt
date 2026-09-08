@@ -1,8 +1,8 @@
-MATERIAL MÓVIL v1.2
+MATERIAL MÓVIL v1.3
 
 Versión móvil/PWA de consulta para GitHub Pages, adaptada a la estructura de material.db v9.12.
 
-CAMBIOS v1.2
+CAMBIOS v1.3
 - Adaptación a tablas reales: articles, technical_sheets, kits/components, clients, cranes, catalogs, advertising_sheets y suppliers.
 - Muestra el nombre del proveedor y oculta ID/proveedor_id.
 - En Artículos, el PDF se busca por CODIGO_BARRAS.pdf (regla confirmada).

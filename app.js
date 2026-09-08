@@ -153,13 +153,42 @@ async function openPdfEntry(entry){
   try{const file=entry.getFile?await entry.getFile():entry;const url=URL.createObjectURL(file);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000)}catch(e){console.error(e);toast('No se pudo abrir el PDF')}
 }
 async function pickPdfFolder(){
-  if(window.showDirectoryPicker){try{directoryHandle=await window.showDirectoryPicker({mode:'read'});await idbSet('pdfDir',directoryHandle);await indexDirectory(directoryHandle);return}catch(e){if(e.name!=='AbortError')console.warn(e)}}
+  // La carpeta PDF usa un almacén independiente de la base SQLite. En Android el
+  // selector puede pausar/reanudar la PWA; al volver verificamos la BD y la vista.
+  const sectionKey=currentSection?.key||null;
+  if(window.showDirectoryPicker){
+    try{
+      const h=await window.showDirectoryPicker({mode:'read'});
+      directoryHandle=h;
+      try{await pdfIdbSet('pdfDir',h)}catch(e){console.warn('No se pudo recordar la carpeta PDF',e)}
+      await indexDirectory(h);
+      await ensureDbReady();
+      restoreSectionAfterPdfPick(sectionKey);
+      return;
+    }catch(e){if(e.name!=='AbortError')console.warn(e)}
+  }
   $('#folderFallback').click();
 }
+async function ensureDbReady(){
+  if(db)return true;
+  try{const buf=await idbGet('dbBytes');const name=await idbGet('dbName');if(buf&&SQL){loadDb(new Uint8Array(buf),name||'material.db');return true}}catch(e){console.warn(e)}
+  return false;
+}
+function restoreSectionAfterPdfPick(sectionKey){
+  if(!db)return;
+  if(sectionKey){const s=sectionMap.find(x=>x.key===sectionKey);if(s){currentSection=s;runSectionQuery($('#sectionSearch')?.value||'');}}
+  renderHome();
+}
+
 async function indexDirectory(handle){pdfIndex.clear();let count=0;async function walk(h){for await(const [name,entry] of h.entries()){if(entry.kind==='directory')await walk(entry);else if(name.toLowerCase().endsWith('.pdf')){pdfIndex.set(name.toLowerCase(),entry);count++}}}await walk(handle);$('#folderStatus').textContent=`${handle.name} · ${count} PDF disponibles`;toast(`${count} PDF indexados`)}
-function indexFallbackFiles(files){pdfIndex.clear();let count=0;for(const f of files){if(f.name.toLowerCase().endsWith('.pdf')){pdfIndex.set(f.name.toLowerCase(),f);count++}}$('#folderStatus').textContent=`Carpeta seleccionada · ${count} PDF disponibles (esta sesión)`;toast(`${count} PDF indexados`)}
-async function restoreDirectoryHandle(){try{const h=await idbGet('pdfDir');if(h&&h.queryPermission){const p=await h.queryPermission({mode:'read'});if(p==='granted'){directoryHandle=h;await indexDirectory(h)}else $('#folderStatus').textContent='Carpeta recordada; toca “Seleccionar carpeta” para autorizarla.'}}catch{}}
+function indexFallbackFiles(files){pdfIndex.clear();let count=0;for(const f of files){if(f.name.toLowerCase().endsWith('.pdf')){pdfIndex.set(f.name.toLowerCase(),f);count++}}$('#folderStatus').textContent=`Carpeta seleccionada · ${count} PDF disponibles (esta sesión)`;toast(`${count} PDF indexados`);ensureDbReady().then(()=>restoreSectionAfterPdfPick(currentSection?.key||null))}
+async function restoreDirectoryHandle(){try{const h=await pdfIdbGet('pdfDir');if(h&&h.queryPermission){const p=await h.queryPermission({mode:'read'});if(p==='granted'){directoryHandle=h;await indexDirectory(h)}else $('#folderStatus').textContent='Carpeta recordada; toca “Seleccionar carpeta” para autorizarla.'}}catch{}}
 function renderAllTables(){const b=$('#allTables');b.innerHTML='';if(!db){b.innerHTML='<div class="card stack muted">Importa primero la base de datos.</div>';return}schema.forEach(t=>{const d=document.createElement('button');d.className='resultCard tableItem';d.innerHTML=`<strong>${html(t.name)}</strong><span class="small muted">${t.cols.length} columnas</span>`;d.onclick=()=>openSection({label:t.name,icon:'🗂️',table:t});b.appendChild(d)})}
+
+function pdfIdb(){return new Promise((res,rej)=>{const r=indexedDB.open('material-movil-pdf',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function pdfIdbSet(k,v){const d=await pdfIdb();return new Promise((res,rej)=>{const tx=d.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
+async function pdfIdbGet(k){const d=await pdfIdb();return new Promise((res,rej)=>{const r=d.transaction('kv').objectStore('kv').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+
 function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('material-movil',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 async function idbSet(k,v){const d=await idb();return new Promise((res,rej)=>{const tx=d.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
 async function idbGet(k){const d=await idb();return new Promise((res,rej)=>{const r=d.transaction('kv').objectStore('kv').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
